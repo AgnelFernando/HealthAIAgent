@@ -2,8 +2,8 @@ from fastapi import FastAPI
 import psycopg2
 from sentence_transformers import SentenceTransformer
 from openai import OpenAI
-import os
 from utils import retrieve_chunks, build_prompt
+import os
 
 app = FastAPI()
 DB_URL = os.getenv("DATABASE_URL")
