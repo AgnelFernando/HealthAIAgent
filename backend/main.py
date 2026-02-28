@@ -1,18 +1,18 @@
 from fastapi import FastAPI, HTTPException
-import os
+from functools import lru_cache
 import psycopg2
+import os
 
 from utils import retrieve_chunks, build_prompt, generate_answer  
-
-app = FastAPI()
 
 DB_URL = os.getenv("DATABASE_URL")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+app = FastAPI()
+
 @app.get("/health")
 def health():
     return {"ok": True}
-
 
 def get_db_conn():
     if not DB_URL:
