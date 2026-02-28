@@ -1,46 +1,74 @@
-from fastapi import FastAPI
-import psycopg2
-from sentence_transformers import SentenceTransformer
-from openai import OpenAI
-from utils import retrieve_chunks, build_prompt
+from fastapi import FastAPI, HTTPException
 import os
+import psycopg2
+from functools import lru_cache
+
+from utils import retrieve_chunks, build_prompt, generate_answer  
 
 app = FastAPI()
+
 DB_URL = os.getenv("DATABASE_URL")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-model = SentenceTransformer("all-MiniLM-L6-v2")
-client = OpenAI(api_key=OPENAI_API_KEY)
 
 @app.get("/health")
 def health():
     return {"ok": True}
 
+
+def get_db_conn():
+    if not DB_URL:
+        raise RuntimeError("DATABASE_URL not set")
+    return psycopg2.connect(DB_URL)
+
+
+@lru_cache(maxsize=1)
+def get_model():
+    # Lazy import so app can start even if model download is slow
+    from sentence_transformers import SentenceTransformer
+    return SentenceTransformer("all-MiniLM-L6-v2")
+
+
+@lru_cache(maxsize=1)
+def get_openai_client():
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY not set")
+    from openai import OpenAI
+    return OpenAI(api_key=OPENAI_API_KEY)
+
+
 @app.post("/rag/answer")
 def rag_answer(payload: dict):
-    question = payload["question"]
+    question = payload.get("question")
+    if not question:
+        raise HTTPException(status_code=400, detail="Missing 'question'")
 
-    conn = psycopg2.connect(DB_URL)
+    # Initialize lazily
+    model = get_model()
+    client = get_openai_client()
 
-    retrieved = retrieve_chunks(question, model, conn)
-    prompt = build_prompt(question, retrieved)
-    answer = generate_answer(client, prompt)
+    conn = get_db_conn()
+    try:
+        retrieved = retrieve_chunks(question, model, conn)
+        if not retrieved:
+            return {"answer": "I don't have enough information in my knowledge base.", "citations": [], "confidence": 0.0}
 
-    confidence = round(sum([r[5] for r in retrieved]) / len(retrieved), 3)
+        prompt = build_prompt(question, retrieved)
+        answer = generate_answer(client, prompt)
 
-    conn.close()
+    
+        similarities = []
+        citations = []
+        for r in retrieved:
+            title = r[3]
+            url = r[4]
+            sim = float(r[5])
 
-    citations = [
-        {
-            "title": r[3],
-            "url": r[4],
-            "similarity": float(r[5]),
-        }
-        for r in retrieved
-    ]
+            similarities.append(sim)
+            citations.append({"title": title, "url": url, "similarity": sim})
 
-    return {
-        "answer": answer,
-        "citations": citations,
-        "confidence": confidence
-    }
+        confidence = round(sum(similarities) / len(similarities), 3)
+
+        return {"answer": answer, "citations": citations, "confidence": confidence}
+
+    finally:
+        conn.close()
