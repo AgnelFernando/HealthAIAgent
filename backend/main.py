@@ -1,7 +1,6 @@
 from fastapi import FastAPI, HTTPException
 import os
 import psycopg2
-from functools import lru_cache
 
 from utils import retrieve_chunks, build_prompt, generate_answer  
 
@@ -22,13 +21,6 @@ def get_db_conn():
 
 
 @lru_cache(maxsize=1)
-def get_model():
-    # Lazy import so app can start even if model download is slow
-    from sentence_transformers import SentenceTransformer
-    return SentenceTransformer("all-MiniLM-L6-v2")
-
-
-@lru_cache(maxsize=1)
 def get_openai_client():
     if not OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY not set")
@@ -42,13 +34,11 @@ def rag_answer(payload: dict):
     if not question:
         raise HTTPException(status_code=400, detail="Missing 'question'")
 
-    # Initialize lazily
-    model = get_model()
     client = get_openai_client()
-
     conn = get_db_conn()
+
     try:
-        retrieved = retrieve_chunks(question, model, conn)
+        retrieved = retrieve_chunks(question, client, conn)
         if not retrieved:
             return {"answer": "I don't have enough information in my knowledge base.", "citations": [], "confidence": 0.0}
 

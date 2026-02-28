@@ -1,14 +1,17 @@
 
-def retrieve_chunks(question, model, conn, k=5):
-    query_embedding = model.encode(
-        [question],
-        normalize_embeddings=True
-    )[0]
+from openai import OpenAI
+import os
 
-    vec_str = "[" + ",".join(map(str, query_embedding.tolist())) + "]"
+def retrieve_chunks(question, client, conn, k=5):
+    resp = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=question,
+        dimensions=384,  
+    )
+    query_embedding = resp.data[0].embedding
 
     cur = conn.cursor()
-    cur.execute("select * from match_knowledge_chunks(%s::vector(384), %s)", (query_embedding.tolist(), k))
+    cur.execute("select * from match_knowledge_chunks(%s::vector(384), %s)", (query_embedding, k))
 
     rows = cur.fetchall()
     cur.close()
