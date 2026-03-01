@@ -3,7 +3,7 @@ from functools import lru_cache
 import psycopg2
 import os
 
-from backend import utils
+import utils
 
 DB_URL = os.getenv("DATABASE_URL")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
