@@ -1,52 +1,123 @@
 # HealthAIAgent
-A wearable-integrated, RAG-grounded, agentic AI that analyzes sleep, activity, and risk signals and produces personalized recommendations + action workflows.
+A wearable-integrated, RAG-grounded, agentic AI that analyzes sleep, activity, and risk signals to produce personalized health insights and action workflows.
 
-## Demo Questions 
-- How many hours of sleep are recommended for newborns and infants?
-- How many hours of sleep should adults get per day for optimal health?
-- What are the health risks associated with insufficient sleep among children and adolescents?
-- Why is good sleep important for heart health?
-- Is short sleep duration associated with obesity, diabetes, or cardiovascular disease in adults?
-- What is sleep hygiene, and how can it improve sleep quality?
-- What is Shift Work Sleep Disorder (SWSD), and who is at risk?
-- How can night shift work affect reproductive or overall health?
-- How does sleep duration and consistency affect academic performance in adolescents or college students?
-- What are the recommended physical activity guidelines for adults and children?
+## Project Overview
 
+HealthAIAgent is a production-oriented AI system that combines:
+
+* Structured wearable time-series data
+* Medical knowledge retrieval (CDC / NIH / WHO)
+* LLM-based reasoning
+* Tool-calling agent workflows
+* Evaluation + grounding metrics
+
+Unlike a simple chatbot, this system:
+
+* Grounds responses in medical guidelines (RAG)
+* Personalizes insights using user health history
+* Performs quantitative trend analysis
+* Returns citations + confidence scores
+
+---
+
+## System Architecture
+
+```
+User Query
+    ↓
+Agent Router
+    ↓
+ ┌──────────────┬──────────────────┐
+ │ RAG Engine   │ Wearable Metrics │
+ │ (pgvector)   │ (Postgres)       │
+ └──────────────┴──────────────────┘
+    ↓
+LLM Reasoning Layer
+    ↓
+Grounded + Personalized Response
+    ↓
+Citations + Confidence Score
+```
+
+### Components
+
+* **FastAPI Backend**
+* **Postgres + pgvector** (knowledge + metrics)
+* **Embedding pipeline** (chunking + vector indexing)
+* **RAG retrieval + citation enforcement**
+* **Confidence scoring layer**
+
+---
+
+## Knowledge Base
+
+Sources include:
+
+* CDC sleep guidelines
+* WHO physical activity recommendations
+* NIH heart health guidance
+* Selected peer-reviewed sleep research
+
+All answers are grounded in retrieved documents.
+
+---
+
+## Structured Wearable Data Support
+
+The system supports:
+
+* Sleep duration
+* Sleep stage %
+* Resting heart rate
+* HRV
+* Steps
+* Activity minutes
+
+Data stored in structured relational format for trend queries.
+
+---
+
+## 🔎 Demo Questions
+
+* How many hours of sleep should adults get?
+* What are the health risks associated with insufficient sleep?
+* What is sleep hygiene?
+* What are recommended physical activity guidelines?
+
+---
 
 ## Example RAG Query & Response
-### Question: How many hours of sleep should adults get?
+
+### Question
+
+How many hours of sleep should adults get?
 
 ```json
 {
-        "answer": "Most adults need at least 7 hours of sleep each night (About Sleep and Your Heart Health).",
-        "citations": [
-            {
-                "title": "About Sleep",
-                "url": "https://www.cdc.gov/sleep/about/",
-                "similarity": 0.605054056945685
-            },
-            {
-                "title": "About Sleep and Your Heart Health",
-                "url": "https://www.cdc.gov/heart-disease/about/sleep-and-heart-health.html",
-                "similarity": 0.588620918650059
-            },
-            {
-                "title": "Sleep and Health",
-                "url": "https://www.cdc.gov/physical-activity-education/staying-healthy/sleep.html",
-                "similarity": 0.585545438097282
-            },
-            {
-                "title": "Sleep Duration as a Correlate of Smoking, Alcohol Use, Leisure-Time Physical Inactivity, and Obesity Among Adults: United States, 2004-2006",
-                "url": "https://www.cdc.gov/nchs/data/hestat/sleep04-06/sleep04-06.htm",
-                "similarity": 0.542281849912352
-            },
-            {
-                "title": "Sleep Duration as a Correlate of Smoking, Alcohol Use, Leisure-Time Physical Inactivity, and Obesity Among Adults: United States, 2004-2006",
-                "url": "https://www.cdc.gov/nchs/data/hestat/sleep04-06/sleep04-06.htm",
-                "similarity": 0.53486032887877
-            }
-        ],
-        "confidence": 0.571
+  "answer": "Most adults need at least 7 hours of sleep each night.",
+  "citations": [
+    {
+      "title": "About Sleep",
+      "url": "https://www.cdc.gov/sleep/about/",
+      "similarity": 0.60
     }
+  ],
+  "confidence": 0.57
+}
+```
+
+## How to Run
+
+```bash
+git clone https://github.com/yourname/HealthAIAgent
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+Environment variables:
+
+```
+DATABASE_URL=
+OPENAI_API_KEY=
 ```
