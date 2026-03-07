@@ -1,5 +1,5 @@
 # HealthAIAgent
-A wearable-integrated, RAG-grounded, agentic AI that analyzes sleep, activity, and risk signals to produce personalized health insights and action workflows.
+A wearable-integrated, RAG-grounded, agentic AI that analyzes sleep, activity, and risk signals to produce personalized health insights and action workflows. <br/> <br/>
 [Live Website](https://agnelfernando.github.io/HealthAIAgent/#/)
 ## Project Overview
 
