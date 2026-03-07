@@ -20,6 +20,7 @@ function formatConfidence(value?: number) {
   padding: 6px 10px;
   font-size: 12px;
   border-radius: 999px;
-  background: #f3f4f6;
+  background: #181818;
+  color: #fff;
 }
 </style>
