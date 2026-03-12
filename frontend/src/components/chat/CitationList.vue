@@ -26,6 +26,14 @@ defineProps<{
 .citations {
   margin-top: 12px;
 }
+.citations a {
+  color: #F0544F;
+  text-decoration: none;
+}
+
+.citations span {
+  color: #D81E5B;
+}
 
 ul {
   padding-left: 18px;
