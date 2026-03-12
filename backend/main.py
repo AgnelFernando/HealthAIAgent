@@ -100,7 +100,8 @@ def metrics_daily(user_id: str, start_date: str, end_date: str):
         daily = db.fetch_daily_metrics(conn, user_id, start_date, end_date)
         if not daily:
             raise HTTPException(status_code=404, detail="No metrics found for this user/range")
-        return {"user_id": user_id, "start_date": start_date, "end_date": end_date, "daily": daily}
+        data = [{"date": r[0].isoformat(), "sleep_minutes": r[1], "resting_hr": r[2], "hrv": r[3], "steps": r[4], "active_minutes": r[5]} for r in daily]
+        return {"user_id": user_id, "data": data}
     finally:
         conn.close()
 
