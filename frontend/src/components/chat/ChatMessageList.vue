@@ -29,7 +29,7 @@ onUpdated(async () => {
   overflow-y: auto;
   padding: 12px;
   border: 1px solid #ddd;
-  border-radius: 12px;
+  border-radius: 12px 12px 0 0;
   background: white;
 }
 </style>

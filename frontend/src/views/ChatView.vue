@@ -27,13 +27,14 @@ const { messages, isLoading, error, sendMessage } = useChat()
 
 <style scoped>
 .chat-page {
-  max-width: 900px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 12px 24px;
+  display: flex;
+  flex-direction: column;
 }
 
 .hero {
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .error {
