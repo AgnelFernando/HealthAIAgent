@@ -5,6 +5,8 @@ import psycopg2
 import os
 
 import utils
+import llm
+import db
 
 DB_URL = os.getenv("DATABASE_URL")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -53,12 +55,13 @@ def rag_answer(payload: dict):
     conn = get_db_conn()
 
     try:
-        retrieved = utils.retrieve_chunks(question, client, conn)
+        question_embedding = llm.create_embeddings(client, question)
+        retrieved = db.fetch_matcing_chunks(conn, question_embedding)
         if not retrieved:
             return {"answer": "I don't have enough information in my knowledge base.", "citations": [], "confidence": 0.0}
 
         prompt = utils.build_prompt(question, retrieved)
-        answer = utils.generate_answer(client, prompt)
+        answer = llm.generate_answer(client, prompt)
 
     
         similarities = []
@@ -90,13 +93,23 @@ def metrics_summary(user_id: str, days: int = 7):
     finally:
         conn.close()
 
+@app.get("/metrics/daily")
+def metrics_daily(user_id: str, start_date: str, end_date: str):
+    conn = get_db_conn()
+    try:
+        daily = db.fetch_daily_metrics(conn, user_id, start_date, end_date)
+        if not daily:
+            raise HTTPException(status_code=404, detail="No metrics found for this user/range")
+        return {"user_id": user_id, "start_date": start_date, "end_date": end_date, "daily": daily}
+    finally:
+        conn.close()
 
 @app.get("/metrics/compare")
 def metrics_compare(user_id: str, days: int = 7, baseline_days: int = 30):
     conn = get_db_conn()
     try:
-        s7 = utils.fetch_metrics_summary(conn, user_id, days)
-        s30 = utils.fetch_metrics_summary(conn, user_id, baseline_days)
+        s7 = db.fetch_metrics_summary(conn, user_id, days)
+        s30 = db.fetch_metrics_summary(conn, user_id, baseline_days)
         if not s7:
             raise HTTPException(status_code=404, detail="No metrics found for this user/range")
         if not s30:
@@ -131,8 +144,8 @@ def chat(payload: dict):
         changes = None
 
         if utils.should_use_metrics(message):
-            s_curr = utils.fetch_metrics_summary(conn, user_id, days)
-            s_base = utils.fetch_metrics_summary(conn, user_id, baseline_days)
+            s_curr = db.fetch_metrics_summary(conn, user_id, days)
+            s_base = db.fetch_metrics_summary(conn, user_id, baseline_days)
 
             if s_curr:
                 metrics_context = {
@@ -158,7 +171,8 @@ def chat(payload: dict):
             flags_text = " ".join([f.get("flag") if isinstance(f, dict) else str(f) for f in flags])
 
         retrieval_query = message if not flags_text else f"{message}\nContext signals: {flags_text}"
-        retrieved = utils.retrieve_chunks(retrieval_query, client, conn)
+        retrieval_query_embedding = llm.create_embeddings(client, retrieval_query)
+        retrieved = db.fetch_matcing_chunks(retrieval_query_embedding, conn)
 
         if not retrieved:
             return {
@@ -178,7 +192,7 @@ def chat(payload: dict):
             changes=changes,
         )
 
-        answer = utils.generate_answer(client, prompt)
+        answer = llm.generate_answer(client, prompt)
 
         similarities, citations = [], []
         for r in retrieved:

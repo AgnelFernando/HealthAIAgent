@@ -1,19 +1,4 @@
 
-def retrieve_chunks(question, client, conn, k=5):
-    resp = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=question,
-        dimensions=384,  
-    )
-    query_embedding = resp.data[0].embedding
-
-    cur = conn.cursor()
-    cur.execute("select * from match_knowledge_chunks(%s::vector(384), %s)", (query_embedding, k))
-
-    rows = cur.fetchall()
-    cur.close()
-    return rows
-
 def build_prompt(question, retrieved_chunks, metrics_context=None, flags=None, changes=None):
     sources_text = "\n\n".join(
         [f"[Source: {r[3]}]\n{r[2]}" for r in retrieved_chunks]
@@ -67,19 +52,6 @@ QUESTION:
 {question}
 """
 
-
-def generate_answer(client, prompt):
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",  
-        messages=[
-            {"role": "system", "content": "You are a helpful medical assistant."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0
-    )
-
-    return response.choices[0].message.content
-
 def compute_health_flags(summary):
     flags = []
 
@@ -96,16 +68,6 @@ def compute_health_flags(summary):
         flags.append("irregular_sleep_schedule")
 
     return flags
-
-from datetime import datetime
-
-def fetch_metrics_summary(conn, user_id: str, days: int) -> dict | None:
-    with conn.cursor() as cur:
-        cur.execute("select user_metrics_summary(%s::uuid, %s::int);", (user_id, days))
-        row = cur.fetchone()
-        if not row:
-            return None
-        return row[0]  
 
 def safe_float(x):
     try:
