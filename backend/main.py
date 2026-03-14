@@ -1,3 +1,4 @@
+from models import UpdateUserProfile, UserProfile
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from functools import lru_cache
@@ -215,4 +216,37 @@ def chat(payload: dict):
         }
 
     finally:
+        conn.close()
+
+@app.get("/user/profile/{user_id}", response_model=UserProfile)
+def get_user_profile(user_id: str):
+    conn = get_db_conn()
+    try:
+        row = db.fetch_user_profile(conn, user_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="User not found")
+        profile = UserProfile(user_id=row[0], name=row[1], dob=row[2], 
+                              gender=row[3], weight_lb=row[4], 
+                              height_cm=row[5], goal=row[6], 
+                              preferred_workout_intensity=row[8], 
+                              sleep_target_hours=row[9], notes=row[10])
+        return profile
+    finally:
+        conn.close()
+
+
+@app.put("/user/profile/{user_id}", response_model=UserProfile)
+def update_profile(user_id: str, payload: UpdateUserProfile):
+    conn = get_db_conn()
+    try:
+        updated_row = db.update_user_profile(conn, user_id, payload)
+        if not updated_row:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        updated_profile = UserProfile(user_id=updated_row[0], name=updated_row[1], dob=updated_row[2], 
+                              gender=updated_row[3], weight_lb=updated_row[4], 
+                              height_cm=updated_row[5], goal=updated_row[6], 
+                              preferred_workout_intensity=updated_row[7], 
+                              sleep_target_hours=updated_row[8], notes=updated_row[9])
+        return updated_profile
+    finally:        
         conn.close()
