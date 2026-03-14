@@ -42,10 +42,17 @@ const { messages, isLoading, error, sendMessage } = useChat()
   padding: 12px;
   border-radius: 8px;
   background: #f87c7c;
+  color: white;
 }
 
 .loading {
   margin: 12px 0;
   font-size: 14px;
+}
+
+html,
+body {
+  overflow: hidden;
+  height: 100%;
 }
 </style>
