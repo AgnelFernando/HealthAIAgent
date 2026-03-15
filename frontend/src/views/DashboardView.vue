@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import MetricCard from '../components/dashboard/MetricCard.vue'
 import { useMetrics } from '../composables/useMetrics'
+import { ref } from 'vue'
+import { USER_OPTIONS } from '../constants/users'
 
-const { cards, isLoading, error, fetchMetrics } = useMetrics("557975cf-2b37-4f1f-8d7e-0b80921d2db7")
+const selectedUserId = ref(
+  localStorage.getItem('selected_user_id') || USER_OPTIONS[0]?.user_id || "557975cf-2b37-4f1f-8d7e-0b80921d2db7"
+)
+
+const { cards, isLoading, error, fetchMetrics } = useMetrics(selectedUserId.value)
 </script>
 
 <template>

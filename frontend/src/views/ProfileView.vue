@@ -1,9 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useProfile } from '../composables/useProfile'
 import { USER_OPTIONS } from '../constants/users'
 
-const selectedUserId = ref(USER_OPTIONS[0]?.user_id ?? '557975cf-2b37-4f1f-8d7e-0b80921d2db7')
+const selectedUserId = ref(
+  localStorage.getItem('selected_user_id') || USER_OPTIONS[0]?.user_id || '1'
+)
+
+watch(selectedUserId, (value) => {
+  localStorage.setItem('selected_user_id', value)
+})
 
 const {
   profile,

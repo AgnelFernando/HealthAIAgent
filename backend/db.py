@@ -1,13 +1,32 @@
-from models import UpdateUserProfile
+from models import UpdateUserProfile, UserProfile
 
 
-def fetch_metrics_summary(conn, user_id: str, days: int) -> dict | None:
+def fetch_sleep_metrics(conn, user_id: str, current_day: str, days: int):
     with conn.cursor() as cur:
-        cur.execute("select user_metrics_summary(%s::uuid, %s::int);", (user_id, days))
+        cur.execute("""
+            select date, sleep_minutes, deep_sleep_pct, rem_sleep_pct
+            from daily_metrics
+            where user_id = %s::uuid
+              and date between %s::date - (%s - 1) * interval '1 day'
+                          and %s::date
+            order by date asc;
+        """, (user_id, current_day, days, current_day))
+        rows = cur.fetchall()
+        return rows
+
+def fetch_metrics_summary(conn, user_id: str, current_day: str, days: int) -> dict | None:
+    with conn.cursor() as cur:
+        cur.execute("select * from user_metrics_summary(%s::uuid, %s::date, %s::int);", 
+                    (user_id, current_day, days))
         row = cur.fetchone()
         if not row:
             return None
-        return row[0]  
+        return {
+                "avg_sleep": row[0],
+                "avg_resting_hr": row[1],
+                "avg_hrv": row[2],
+                "total_steps": row[3],
+                "sleep_variability": row[4] }  
 
 def fetch_daily_metrics(conn, user_id: str, start_date: str, end_date: str) -> list[dict] | None:
     with conn.cursor() as cur:
@@ -27,7 +46,19 @@ def fetch_user_profile(conn, user_id: str) -> dict | None:
     with conn.cursor() as cur:
         cur.execute("select * from users where id = %s::uuid;", (user_id,))
         row = cur.fetchone()
-        return row
+        if not row:
+            return None
+        return UserProfile(
+            user_id=row[0], 
+            name=row[1], 
+            dob=row[2], 
+            gender=row[3], 
+            weight_lb=row[4], 
+            height_cm=row[5], 
+            goal=row[6], 
+            preferred_workout_intensity=row[8], 
+            sleep_target_hours=row[9], 
+            notes=row[10])
     
 def update_user_profile(conn, user_id: str, profile_data: UpdateUserProfile) -> bool:
     with conn.cursor() as cur:

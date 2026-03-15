@@ -82,12 +82,11 @@ def rag_answer(payload: dict):
     finally:
         conn.close()
 
-
 @app.get("/metrics/summary")
 def metrics_summary(user_id: str, days: int = 7):
     conn = get_db_conn()
     try:
-        summary = utils.fetch_metrics_summary(conn, user_id, days)
+        summary = db.fetch_metrics_summary(conn, user_id, days)
         if not summary:
             raise HTTPException(status_code=404, detail="No metrics found for this user/range")
         return {"user_id": user_id, "days": days, "summary": summary}
@@ -222,14 +221,9 @@ def chat(payload: dict):
 def get_user_profile(user_id: str):
     conn = get_db_conn()
     try:
-        row = db.fetch_user_profile(conn, user_id)
-        if not row:
+        profile = db.fetch_user_profile(conn, user_id)
+        if not profile:
             raise HTTPException(status_code=404, detail="User not found")
-        profile = UserProfile(user_id=row[0], name=row[1], dob=row[2], 
-                              gender=row[3], weight_lb=row[4], 
-                              height_cm=row[5], goal=row[6], 
-                              preferred_workout_intensity=row[8], 
-                              sleep_target_hours=row[9], notes=row[10])
         return profile
     finally:
         conn.close()
@@ -249,4 +243,55 @@ def update_profile(user_id: str, payload: UpdateUserProfile):
                               sleep_target_hours=updated_row[8], notes=updated_row[9])
         return updated_profile
     finally:        
+        conn.close()
+
+@app.get("/analysis/sleep-trends")
+def sleep_trends(user_id: str, current_day: str, days: int = 7):
+    conn = get_db_conn()
+    try:
+        summary = db.fetch_metrics_summary(conn, user_id, current_day, days)
+        if not summary:
+            raise HTTPException(status_code=404, detail="No metrics found for this user/range")
+
+        profile: UserProfile = db.fetch_user_profile(conn, user_id)
+        target_sleep_hours = 8.0
+        if profile and profile.sleep_target_hours is not None:
+            target_sleep_hours = float(profile.sleep_target_hours)
+
+        rows = db.fetch_sleep_metrics(conn, user_id, current_day, days)
+        if not rows:
+            raise HTTPException(status_code=404, detail="No sleep metrics found for this user/range")
+
+        sleep_values = [float(row[1]) for row in rows if row[1] is not None]
+        deep_values = [float(row[2]) for row in rows if row[2] is not None]
+        rem_values = [float(row[3]) for row in rows if row[3] is not None]
+
+        avg_sleep_minutes = float(summary.get("avg_sleep") or 0)
+        sleep_debt_hours = utils.compute_sleep_debt_hours(sleep_values, target_sleep_hours)
+        days_below_target = utils.compute_days_below_target(sleep_values, target_sleep_hours)
+        consistency_score = utils.compute_consistency_score(sleep_values)
+
+        avg_deep_pct = round(utils.safe_avg(deep_values), 1)
+        avg_rem_pct = round(utils.safe_avg(rem_values), 1)
+
+        summary_text = utils.build_sleep_summary(
+            avg_sleep_minutes=avg_sleep_minutes,
+            target_sleep_hours=target_sleep_hours,
+            days_below_target=days_below_target,
+            consistency_score=consistency_score,
+        )
+
+        return {
+            "user_id": user_id,
+            "days": days,
+            "avg_sleep_minutes": round(avg_sleep_minutes, 1),
+            "sleep_debt_hours": sleep_debt_hours,
+            "consistency_score": consistency_score,
+            "avg_deep_pct": avg_deep_pct,
+            "avg_rem_pct": avg_rem_pct,
+            "days_below_target": days_below_target,
+            "target_sleep_hours": target_sleep_hours,
+            "summary": summary_text,
+        }
+    finally:
         conn.close()

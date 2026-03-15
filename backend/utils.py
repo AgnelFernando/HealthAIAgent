@@ -87,3 +87,42 @@ METRIC_TERMS = ("sleep", "hrv", "resting", "heart", "steps", "tired", "recovery"
 def should_use_metrics(message: str) -> bool:
     m = (message or "").lower()
     return any(t in m for t in METRIC_TERMS)
+
+from statistics import pstdev
+
+def safe_avg(values):
+    values = [v for v in values if v is not None]
+    if not values:
+        return 0.0
+    return sum(values) / len(values)
+
+def compute_sleep_debt_hours(sleep_values: list[float], target_sleep_hours: float) -> float:
+    target_minutes = target_sleep_hours * 60
+    total_deficit = sum(max(0, target_minutes - value) for value in sleep_values if value is not None)
+    return round(total_deficit / 60, 1)
+
+def compute_days_below_target(sleep_values: list[float], target_sleep_hours: float) -> int:
+    target_minutes = target_sleep_hours * 60
+    return sum(1 for value in sleep_values if value is not None and value < target_minutes)
+
+def compute_consistency_score(sleep_values: list[float]) -> float:
+    values = [v for v in sleep_values if v is not None]
+    if len(values) <= 1:
+        return 1.0
+    std_dev = pstdev(values)
+    score = max(0.0, min(1.0, 1 - (std_dev / 120)))
+    return round(score, 2)
+
+def build_sleep_summary(avg_sleep_minutes, target_sleep_hours, days_below_target, consistency_score):
+    avg_sleep_hours = avg_sleep_minutes / 60 if avg_sleep_minutes else 0
+
+    if days_below_target >= 5:
+        return f"Sleep duration was below the {target_sleep_hours:g}-hour target on {days_below_target} of the last 7 days."
+
+    if consistency_score < 0.6:
+        return "Sleep duration varied significantly across the last 7 days, suggesting an inconsistent sleep schedule."
+
+    if avg_sleep_hours >= target_sleep_hours:
+        return "Sleep duration was generally aligned with the target and remained relatively stable this week."
+
+    return "Sleep was moderately below target this week, but patterns were fairly consistent overall."
