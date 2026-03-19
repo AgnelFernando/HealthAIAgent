@@ -71,7 +71,7 @@ function formatConsistency(score: number) {
 
 .header {
   margin-bottom: 20px;
-  color: #38E4AE;
+  color: hsla(160, 100%, 37%, 1);;
 }
 
 .header h2 {
@@ -100,7 +100,7 @@ function formatConsistency(score: number) {
 }
 
 .analysis-item strong {
-    color: #7BD389;
+    color: #727272;
     font-weight: 600;
 }
 
@@ -118,7 +118,7 @@ function formatConsistency(score: number) {
 .summary-box p {
   margin: 8px 0 0 0;
   line-height: 1.5;
-  color: #7BD389;
+  color: #727272;
 }
 
 @media (max-width: 768px) {

@@ -5,6 +5,8 @@ import SleepAnalysisPanel from '../components/dashboard/SleepAnalysisPanel.vue'
 import { useMetrics } from '../composables/useMetrics'
 import { useSleepAnalysis } from '../composables/useSleepAnalysis'
 import { USER_OPTIONS } from '../constants/users'
+import RiskFlagsPanel from '../components/dashboard/RiskFlagsPanel.vue'
+import { useAnomalies } from '../composables/useAnomalies'
 
 const selectedUserId = ref(
   localStorage.getItem('selected_user_id') ||
@@ -20,9 +22,17 @@ const {
   fetchSleepAnalysis,
 } = useSleepAnalysis(selectedUserId)
 
+const {
+  anomalies,
+  isLoading: isAnomaliesLoading,
+  error: anomaliesError,
+  fetchAnomalies,
+} = useAnomalies(selectedUserId)
+
 function refreshAll() {
   fetchMetrics()
   fetchSleepAnalysis()
+  fetchAnomalies()
 }
 </script>
 
@@ -67,6 +77,19 @@ function refreshAll() {
     <SleepAnalysisPanel
       v-else-if="analysis"
       :analysis="analysis"
+    />
+
+    <section v-if="isAnomaliesLoading" class="state-box analysis-state">
+      Loading risk flags...
+    </section>
+
+    <section v-else-if="anomaliesError" class="state-box error analysis-state">
+      {{ anomaliesError }}
+    </section>
+
+    <RiskFlagsPanel
+      v-else-if="anomalies"
+      :anomalies="anomalies"
     />
   </main>
 </template>
