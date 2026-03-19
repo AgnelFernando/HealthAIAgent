@@ -1,3 +1,5 @@
+from datetime import date
+
 from models import UpdateUserProfile, UserProfile
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -100,8 +102,7 @@ def metrics_daily(user_id: str, start_date: str, end_date: str):
         daily = db.fetch_daily_metrics(conn, user_id, start_date, end_date)
         if not daily:
             raise HTTPException(status_code=404, detail="No metrics found for this user/range")
-        data = [{"date": r[0].isoformat(), "sleep_minutes": r[1], "resting_hr": r[2], "hrv": r[3], "steps": r[4], "active_minutes": r[5]} for r in daily]
-        return {"user_id": user_id, "data": data}
+        return {"user_id": user_id, "data": daily}
     finally:
         conn.close()
 
@@ -293,5 +294,37 @@ def sleep_trends(user_id: str, current_day: str, days: int = 7):
             "target_sleep_hours": target_sleep_hours,
             "summary": summary_text,
         }
+    finally:
+        conn.close()
+
+
+@app.get("/analysis/anomalies")
+def sleep_anomalies(user_id: str, current_day: str, days: int = 7):
+    conn = get_db_conn()
+    try:
+        baseline = db.fetch_metrics_summary(conn, user_id, current_day, 30)
+        recent = db.fetch_metrics_summary(conn, user_id, current_day, days)
+        profile: UserProfile = db.fetch_user_profile(conn, user_id)
+
+        if not baseline or not recent:
+            raise HTTPException(status_code=404, detail="Not enough metrics found for anomaly detection")
+
+        recent_metrics = db.fetch_recent_metrics(conn, user_id, current_day, 7)
+
+        sleep_target_hours = 8.0
+        if profile and profile.sleep_target_hours is not None:
+            sleep_target_hours = float(profile.sleep_target_hours)
+
+        flags = []
+
+        flags.extend(utils.compute_hr_flags(recent, baseline, days))
+        flags.extend(utils.compute_sleep_flags(recent_metrics, sleep_target_hours))
+
+        return {
+            "user_id": user_id,
+            "days": days,
+            "flags": flags
+        }
+
     finally:
         conn.close()

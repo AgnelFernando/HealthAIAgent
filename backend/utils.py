@@ -1,3 +1,6 @@
+from statistics import pstdev
+
+METRIC_TERMS = ("sleep", "hrv", "resting", "heart", "steps", "tired", "recovery", "training", "baseline", "last week", "my ")
 
 def build_prompt(question, retrieved_chunks, metrics_context=None, flags=None, changes=None):
     sources_text = "\n\n".join(
@@ -82,13 +85,21 @@ def pct_change(curr, base):
         return None
     return round(((curr - base) / base) * 100.0, 1)
 
-METRIC_TERMS = ("sleep", "hrv", "resting", "heart", "steps", "tired", "recovery", "training", "baseline", "last week", "my ")
+def pct_drop(current, baseline):
+    if current is None or baseline is None or baseline == 0:
+        return None
+    return ((baseline - current) / baseline) * 100
+
+def severity_from_threshold(value: float, medium_threshold: float, high_threshold: float) -> str:
+    if value >= high_threshold:
+        return "high"
+    if value >= medium_threshold:
+        return "medium"
+    return "low"
 
 def should_use_metrics(message: str) -> bool:
     m = (message or "").lower()
     return any(t in m for t in METRIC_TERMS)
-
-from statistics import pstdev
 
 def safe_avg(values):
     values = [v for v in values if v is not None]
@@ -126,3 +137,77 @@ def build_sleep_summary(avg_sleep_minutes, target_sleep_hours, days_below_target
         return "Sleep duration was generally aligned with the target and remained relatively stable this week."
 
     return "Sleep was moderately below target this week, but patterns were fairly consistent overall."
+
+def compute_hr_flags(recent, baseline, days):
+    flags = []
+
+    # 1. Resting HR elevated
+    hr_change_pct = pct_change(
+        recent.get("avg_resting_hr"),
+        baseline.get("avg_resting_hr")
+    )
+    if hr_change_pct is not None and hr_change_pct >= 10:
+        severity = "high" if hr_change_pct >= 15 else "medium"
+        flags.append({
+            "metric": "resting_hr",
+            "severity": severity,
+            "message": f"Resting HR is {round(hr_change_pct)}% above your {days}-day baseline."
+        })
+
+    # 2. HRV suppressed
+    hrv_drop_pct = pct_drop(
+        recent.get("avg_hrv"),
+        baseline.get("avg_hrv")
+    )
+    if hrv_drop_pct is not None and hrv_drop_pct >= 15:
+        severity = "high" if hrv_drop_pct >= 25 else "medium"
+        flags.append({
+            "metric": "hrv",
+            "severity": severity,
+            "message": f"HRV is {round(hrv_drop_pct)}% below your {days}-day baseline."
+        })
+
+    return flags
+
+def compute_sleep_flags(recent_rows, sleep_target_hours):
+    target_sleep_minutes = sleep_target_hours * 60
+    flags = []
+
+    # 1. Sleep below target for 3+ days
+    days_below_target = 0
+    for row in recent_rows:
+        sleep_minutes = row[1]
+        if sleep_minutes is not None and float(sleep_minutes) < target_sleep_minutes:
+            days_below_target += 1
+
+    if days_below_target >= 3:
+        severity = "high" if days_below_target >= 5 else "medium"
+        flags.append({
+            "metric": "sleep_target",
+            "severity": severity,
+            "message": f"Sleep duration was below the {sleep_target_hours:g}-hour target on {days_below_target} of the last 7 days."
+        })
+
+    # 2. Activity spike after poor sleep
+    recent_steps = [float(row[4]) for row in recent_rows if row[4] is not None]
+    avg_recent_steps = sum(recent_steps) / len(recent_steps) if recent_steps else 0
+
+    activity_spike_detected = False
+    for row in recent_rows:
+        sleep_minutes = row[1]
+        steps = row[4]
+        if sleep_minutes is None or steps is None:
+            continue
+
+        if float(sleep_minutes) < target_sleep_minutes and float(steps) > avg_recent_steps * 1.2:
+            activity_spike_detected = True
+            break
+
+    if activity_spike_detected:
+        flags.append({
+            "metric": "activity_recovery",
+            "severity": "medium",
+            "message": "Activity volume spiked on a low-sleep day, which may reduce recovery quality."
+        })
+
+    return flags

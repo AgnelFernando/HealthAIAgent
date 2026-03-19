@@ -34,8 +34,22 @@ def fetch_daily_metrics(conn, user_id: str, start_date: str, end_date: str) -> l
                         where user_id = %s::uuid and date BETWEEN %s::date AND %s::date;""", 
                         (user_id, start_date, end_date))
         rows = cur.fetchall()
-        return rows
+        if rows:
+            return [{"date": r[0].isoformat(), "sleep_minutes": r[1], "resting_hr": r[2], "hrv": r[3], "steps": r[4], "active_minutes": r[5]} for r in rows]
+        return None
     
+def fetch_recent_metrics(conn, user_id: str, current_day: str, days: int):
+    with conn.cursor() as cur:
+        cur.execute("""
+            select date, sleep_minutes, resting_hr, hrv, steps, active_minutes
+            from daily_metrics
+            where user_id = %s::uuid
+              and date between %s::date - (%s - 1) * interval '1 day'
+                          and %s::date
+            order by date asc;
+        """, (user_id, current_day, days, current_day))
+        return cur.fetchall()
+
 def fetch_matcing_chunks(conn, query_embedding, k=5):
     with conn.cursor() as cur:
         cur.execute("select * from match_knowledge_chunks(%s::vector(384), %s)", (query_embedding, k))
