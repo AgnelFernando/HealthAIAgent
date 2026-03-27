@@ -5,11 +5,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from functools import lru_cache
 import psycopg2
-import os
 
 import utils
+import json
 import llm
 import db
+import os
 
 DB_URL = os.getenv("DATABASE_URL")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -106,6 +107,7 @@ def metrics_daily(user_id: str, start_date: str, end_date: str):
     finally:
         conn.close()
 
+
 @app.get("/metrics/compare")
 def metrics_compare(user_id: str, days: int = 7, baseline_days: int = 30):
     conn = get_db_conn()
@@ -127,15 +129,17 @@ def metrics_compare(user_id: str, days: int = 7, baseline_days: int = 30):
     finally:
         conn.close()
 
+
 @app.post("/chat")
 def chat(payload: dict):
     user_id = payload.get("user_id")
     message = payload.get("message")
     days = int(payload.get("days", 7))
     baseline_days = int(payload.get("baseline_days", 30))
+    current_day = payload.get("current_day")  
 
-    if not user_id or not message:
-        raise HTTPException(status_code=400, detail="Missing 'user_id' or 'message'")
+    if not user_id or not message or not current_day:
+        raise HTTPException(status_code=400, detail="Missing 'user_id' or 'message' or 'current_day'")
 
     client = get_openai_client()
     conn = get_db_conn()
@@ -144,10 +148,15 @@ def chat(payload: dict):
         metrics_context = None
         flags = []
         changes = None
+        profile = None
+        sleep_analysis = None
+        anomaly_flags = []
+
+        profile = db.fetch_user_profile(conn, user_id)
 
         if utils.should_use_metrics(message):
-            s_curr = db.fetch_metrics_summary(conn, user_id, days)
-            s_base = db.fetch_metrics_summary(conn, user_id, baseline_days)
+            s_curr = db.fetch_metrics_summary(conn, user_id, current_day, days)
+            s_base = db.fetch_metrics_summary(conn, user_id, current_day, baseline_days)
 
             if s_curr:
                 metrics_context = {
@@ -159,42 +168,86 @@ def chat(payload: dict):
 
                 if s_base:
                     changes = {
-                        "sleep_change_pct": utils.pct_change(s_curr.get("avg_sleep"), s_base.get("avg_sleep")),
-                        "resting_hr_change_pct": utils.pct_change(s_curr.get("avg_resting_hr"), s_base.get("avg_resting_hr")),
-                        "hrv_change_pct": utils.pct_change(s_curr.get("avg_hrv"), s_base.get("avg_hrv")),
-                        "steps_change_pct": utils.pct_change(s_curr.get("total_steps"), s_base.get("total_steps")),
+                        "sleep_change_pct": utils.pct_change(
+                            s_curr.get("avg_sleep"), s_base.get("avg_sleep")
+                        ),
+                        "resting_hr_change_pct": utils.pct_change(
+                            s_curr.get("avg_resting_hr"), s_base.get("avg_resting_hr")
+                        ),
+                        "hrv_change_pct": utils.pct_change(
+                            s_curr.get("avg_hrv"), s_base.get("avg_hrv")
+                        ),
+                        "steps_change_pct": utils.pct_change(
+                            s_curr.get("total_steps"), s_base.get("total_steps")
+                        ),
                     }
 
+                # old simple flags
                 flags = utils.compute_health_flags(s_curr)
 
+                # new sleep analysis
+                current_sleep_metrics = db.fetch_sleep_metrics(conn, user_id, current_day, days)
+                sleep_analysis = utils.build_sleep_analysis(
+                    current_sleep_metrics=current_sleep_metrics,
+                    profile=profile,
+                    metrics_summary=s_curr,
+                )
+
+                # new anomaly detection
+                recent_metrics = db.fetch_recent_metrics(conn, user_id, current_day, days)
+                anomaly_flags = utils.detect_anomalies(
+                    recent_rows=recent_metrics,
+                    days=7,
+                    baseline_days=baseline_days,
+                    profile=profile,
+                    current_summary=s_curr,
+                    baseline_summary=s_base,
+                )
 
         flags_text = ""
+        merged_flags = []
+
         if flags:
-            flags_text = " ".join([f.get("flag") if isinstance(f, dict) else str(f) for f in flags])
+            merged_flags.extend(flags)
+
+        if anomaly_flags:
+            merged_flags.extend([f["message"] for f in anomaly_flags])
+
+        if merged_flags:
+            flags_text = " ".join(str(f) for f in merged_flags)
 
         retrieval_query = message if not flags_text else f"{message}\nContext signals: {flags_text}"
         retrieval_query_embedding = llm.create_embeddings(client, retrieval_query)
-        retrieved = db.fetch_matcing_chunks(retrieval_query_embedding, conn)
+        retrieved = db.fetch_matcing_chunks(conn, retrieval_query_embedding)
 
         if not retrieved:
             return {
-                "answer": "I don't have enough information in my knowledge base.",
+                "summary": "I don't have enough information in my knowledge base.",
+                "what_changed": [],
+                "guidance": [],
                 "citations": [],
                 "confidence": 0.0,
                 "metrics": metrics_context,
-                "flags": flags,
+                "flags": anomaly_flags,
                 "changes": changes,
+                "profile": profile,
+                "sleep_analysis": sleep_analysis,
             }
 
-        prompt = utils.build_prompt(
+        prompt = utils.build_personalized_chat_prompt(
             question=message,
             retrieved_chunks=retrieved,
+            profile=profile,
             metrics_context=metrics_context,
             flags=flags,
+            anomaly_flags=anomaly_flags,
             changes=changes,
+            sleep_analysis=sleep_analysis,
         )
 
-        answer = llm.generate_answer(client, prompt)
+        raw_answer = llm.generate_answer(client, prompt)
+
+        parsed = utils.parse_chat_json_response(raw_answer)
 
         similarities, citations = [], []
         for r in retrieved:
@@ -202,17 +255,29 @@ def chat(payload: dict):
             url = r[4]
             sim = float(r[5])
             similarities.append(sim)
-            citations.append({"title": title, "url": url, "similarity": sim})
+            citations.append({
+                "title": title,
+                "url": url,
+                "similarity": sim
+            })
 
-        confidence = round(sum(similarities) / len(similarities), 3)
+        confidence = utils.compute_chat_confidence(
+            similarities=similarities,
+            sleep_analysis=sleep_analysis,
+            anomaly_flags=anomaly_flags,
+        )
 
         return {
-            "answer": answer,
+            "summary": parsed.get("summary", ""),
+            "what_changed": parsed.get("what_changed", []),
+            "guidance": parsed.get("guidance", []),
             "citations": citations,
             "confidence": confidence,
             "metrics": metrics_context,
-            "flags": flags,
+            "flags": anomaly_flags,
             "changes": changes,
+            "profile": profile,
+            "sleep_analysis": sleep_analysis,
         }
 
     finally:
