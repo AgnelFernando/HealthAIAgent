@@ -20,12 +20,12 @@ function handleSubmit() {
   <div class="chat-input">
     <textarea
       v-model="input"
-      placeholder="Ask about sleep, activity, or health guidance..."
+      placeholder="Ask about sleep, fatigue, recovery, or workout intensity..."
       rows="3"
       @keydown.enter.exact.prevent="handleSubmit"
     />
-    <button @click="handleSubmit">
-      <img :src="sendIcon" alt="Send" class="send-icon"/>
+    <button @click="handleSubmit" type="button">
+      <img :src="sendIcon" alt="Send" class="send-icon" />
     </button>
   </div>
 </template>
@@ -41,21 +41,23 @@ textarea {
   padding: 12px;
   resize: vertical;
   font: inherit;
-  border: 0px solid #ccc;
+  border: 0;
   border-radius: 0;
 }
 
 button {
-  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 10px 18px;
   border: none;
   border-radius: 0 0 8px 0;
   cursor: pointer;
-  height: stretch;
   background: white;
 }
+
 .send-icon {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
 }
 </style>

@@ -8,7 +8,6 @@ defineProps<{
 
 <template>
   <div v-if="citations.length" class="citations">
-    <h4>Sources</h4>
     <ul>
       <li v-for="(citation, index) in citations" :key="index">
         <a :href="citation.url" target="_blank" rel="noopener noreferrer">
@@ -26,17 +25,19 @@ defineProps<{
 .citations {
   margin-top: 12px;
 }
+
 .citations a {
-  color: #F0544F;
+  color: #f0544f;
   text-decoration: none;
 }
 
 .citations span {
-  color: #D81E5B;
+  color: #d81e5b;
 }
 
 ul {
   padding-left: 18px;
+  margin: 0;
 }
 
 li {

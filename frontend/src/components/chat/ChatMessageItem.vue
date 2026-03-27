@@ -38,17 +38,49 @@ function getLabel() {
         <strong>{{ getLabel() }}</strong>
       </div>
 
-      <p class="message-text">{{ message.text }}</p>
+      <template v-if="!isAssistant">
+        <p class="message-text">{{ message.text }}</p>
+      </template>
 
-      <CitationList
-        v-if="isAssistant && message.citations?.length"
-        :citations="message.citations"
-      />
+      <template v-else>
+        <section class="assistant-section">
+          <h4>Summary</h4>
+          <p class="message-text">{{ message.summary || message.text }}</p>
+        </section>
 
-      <ConfidenceBadge
-        v-if="isAssistant"
-        :confidence="message.confidence"
-      />
+        <section
+          v-if="message.whatChanged && message.whatChanged.length"
+          class="assistant-section"
+        >
+          <h4>What changed in your data</h4>
+          <ul class="section-list">
+            <li v-for="item in message.whatChanged" :key="item">{{ item }}</li>
+          </ul>
+        </section>
+
+        <section
+          v-if="message.guidance && message.guidance.length"
+          class="assistant-section"
+        >
+          <h4>Relevant guidance</h4>
+          <ul class="section-list">
+            <li v-for="item in message.guidance" :key="item">{{ item }}</li>
+          </ul>
+        </section>
+
+        <section
+          v-if="message.citations && message.citations.length"
+          class="assistant-section"
+        >
+          <h4>Sources</h4>
+          <CitationList :citations="message.citations" />
+        </section>
+
+        <ConfidenceBadge
+          v-if="message.confidence !== undefined"
+          :confidence="message.confidence"
+        />
+      </template>
     </div>
   </div>
 </template>
@@ -79,13 +111,13 @@ function getLabel() {
 }
 
 .message-bubble-user {
-  background: #FDF0D5;
-  color: #D81E5B;
+  background: #fdf0d5;
+  color: #d81e5b;
 }
 
 .message-bubble-assistant {
-  background: #C6D8D3;
-  color: #3A3335;
+  background: #c6d8d3;
+  color: #3a3335;
 }
 
 .message-bubble-system {
@@ -107,5 +139,23 @@ function getLabel() {
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.assistant-section + .assistant-section {
+  margin-top: 16px;
+}
+
+.assistant-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.section-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.section-list li + li {
+  margin-top: 6px;
 }
 </style>

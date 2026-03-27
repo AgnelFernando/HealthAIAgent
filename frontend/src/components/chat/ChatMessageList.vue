@@ -19,7 +19,11 @@ onUpdated(async () => {
 
 <template>
   <div ref="containerRef" class="message-list">
-    <ChatMessageItem v-for="message in messages" :key="message.id" :message="message" />
+    <ChatMessageItem
+      v-for="message in messages"
+      :key="message.id"
+      :message="message"
+    />
   </div>
 </template>
 

@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { API_BASE_URL } from '../config'
 import type { ChatMessage, AssistantPayload } from '../types/chat'
 
@@ -6,18 +6,30 @@ function createId() {
   return crypto.randomUUID()
 }
 
-export function useChat() {
+export function useChat(selectedUserId: { value: string }) {
   const messages = ref<ChatMessage[]>([
     {
       id: createId(),
       role: 'system',
-      text: 'Ask a question about sleep, activity, or health guidance.',
+      text: 'Ask a personalized question about sleep, activity, or recovery.',
       createdAt: new Date().toISOString(),
     },
   ])
 
   const isLoading = ref(false)
   const error = ref('')
+
+  function resetChat() {
+    messages.value = [
+      {
+        id: createId(),
+        role: 'system',
+        text: 'Ask a personalized question about sleep, activity, or recovery.',
+        createdAt: new Date().toISOString(),
+      },
+    ]
+    error.value = ''
+  }
 
   async function sendMessage(question: string) {
     const trimmed = question.trim()
@@ -35,12 +47,18 @@ export function useChat() {
     isLoading.value = true
 
     try {
-      const response = await fetch(`${API_BASE_URL}/rag/answer`, {
+      const response = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ question: trimmed }),
+        body: JSON.stringify({
+          user_id: selectedUserId.value,
+          message: trimmed,
+          days: 7,
+          baseline_days: 30,
+          current_day: "2025-12-10",
+        }),
       })
 
       if (!response.ok) {
@@ -52,18 +70,22 @@ export function useChat() {
       messages.value.push({
         id: createId(),
         role: 'assistant',
-        text: data.answer,
+        text: data.summary || 'No response generated.',
+        summary: data.summary,
+        whatChanged: data.what_changed ?? [],
+        guidance: data.guidance ?? [],
         citations: data.citations ?? [],
         confidence: data.confidence,
         createdAt: new Date().toISOString(),
       })
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Something went wrong.'
+      error.value =
+        err instanceof Error ? err.message : 'Something went wrong.'
 
       messages.value.push({
         id: createId(),
         role: 'assistant',
-        text: 'Sorry, I could not get a response from the server.',
+        text: 'Sorry, I could not get a personalized response from the server.',
         createdAt: new Date().toISOString(),
       })
     } finally {
@@ -71,10 +93,18 @@ export function useChat() {
     }
   }
 
+  watch(
+    () => selectedUserId.value,
+    () => {
+      resetChat()
+    }
+  )
+
   return {
     messages,
     isLoading,
     error,
     sendMessage,
+    resetChat,
   }
 }
